@@ -37,10 +37,27 @@
 #define LOW 0
 #define HIGH 1
 
-//***************************//
-#define TRIG 11 // GPIO PIN TRIG
-#define ECHO 26 // GPIO PIN ECHO
-//***************************//
+#define VARX
+
+#ifdef VAR2
+int TRIG = 8; // GPIO PIN TRIG
+int ECHO = 11; // GPIO PIN ECHO				
+#endif
+
+#ifdef VAR7_1
+int TRIG = 26; // GPIO PIN TRIG
+int ECHO = 27; // GPIO PIN ECHO
+#endif
+
+#ifdef VAR7_2
+int TRIG = 8; // GPIO PIN TRIG
+int ECHO = 11; // GPIO PIN ECHO
+#endif
+
+#ifdef VAR9
+int TRIG = 8; // GPIO PIN TRIG
+int ECHO = 11; // GPIO PIN ECHO	
+#endif
 
 void Exiting(int);
 
@@ -220,25 +237,6 @@ int main(int argc, char *argv[])
 
 	if (!quiet)
 		printf("\nThe rangefinder application was started\n\n");
-	char *mode = argv[1 + quiet];
-
-	if (strcmp(mode, "-s") == 0) {
-		char data[32];
-		while (1) {
-			scanf("%s", data);
-			fflush(stdin);
-			printf("%s\n", data);
-			fflush(stdout);
-		}
-	}
-
-	if (strcmp(mode, "-f") == 0) {
-		char *file = argv[2 + quiet];
-		if (read_pins_file(file) < 0)
-			return -1;
-		else
-			return 0;
-	}
 
 	double search_time = 0;
 	signal(SIGINT, Exiting_sig);
@@ -274,12 +272,12 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		double end_time = clock();
-		search_time = end_time - start_time;
+		search_time = (end_time - start_time)/CLOCKS_PER_SEC;
 
 		sl = atoi(argv[argument]);
 
 		if (!quiet)
-			printf("signal_delay: %lf ms\n", search_time);
+			printf("signal_delay: %lf s\n", search_time);
 		else
 			printf("%lf\n", search_time);
 		fflush(stdout);
