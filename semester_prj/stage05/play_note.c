@@ -67,7 +67,7 @@ void sigfunc(int sig) {
 	printf("In sigfunc sig = %d\n", sig);
 	if (sig == SIGINT) {
 		if (writeFifo("stop_prog", "stop") < 0) {
-			printf ( "Failed to open stop program pipe = %s",  note_fifo);
+			printf ( "Failed to open stop program pipe = stop_prog");
 			return;
 		}
 		sigint_recv = 1;
@@ -176,7 +176,6 @@ int main(int argc, char *argv[]) {
 		}
 		fflush(stdout);
 		if (sigint_recv) {
-			sleep(1);
 			exit(0);
 		}
 	}
