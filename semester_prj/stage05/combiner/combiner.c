@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 				struct tm * timeinfo;
 				time ( &rawtime );
 				timeinfo = localtime ( &rawtime );
-				printf ( "Time %s, set min range %0.6f", asctime (timeinfo), min_range);
+				printf ( "Time %s, set min range %0.6f\n", asctime (timeinfo), min_range);
 			}
 		} else if (!button_1_state) {
 			max_range = getRange(range_fifo);
@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
 				struct tm * timeinfo;
 				time ( &rawtime );
 				timeinfo = localtime ( &rawtime );
-				printf ( "Time %s, set max range %0.6f", asctime (timeinfo), max_range);
+				printf ( "Time %s, set max range %0.6f\n", asctime (timeinfo), max_range);
 			}
 
 		} else {
