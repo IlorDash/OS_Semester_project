@@ -43,6 +43,7 @@ int writeFifo(char * fifoName, char * str) {
 	//printf("In write fifo = %s\n", fifoName);
 
 	int fifo_d = open(fifoName, O_WRONLY);
+
 	if (fifo_d == -1) {
 		printf ( "Failed to open named pipe = %s", fifoName);
 		return -1;
@@ -73,10 +74,12 @@ int getButtonState(char * fifo_name) {
 	char button_str[100] = {0};
 	//printf("72) init button_str = %s\n", button_str);
 	int button_state_pos = readFifo(fifo_name, button_str, 100);
+
 	if (button_state_pos < 0) {
 		printf ( "Failed to open get Button state pipe = %s",  fifo_name);
 		return -1;
 	}
+
 	char* last_new_line = strrchr(button_str, '\n');
 	//printf("button_str = %s", button_str);
 	//printf("button_str last = %d\n", last_new_line[-1] - '0');
@@ -106,14 +109,21 @@ int setNote(char * fifo_name, char * note) {
 }
 
 
+
+
+
 int stop_prog_recv = 0;
 pthread_mutex_t mutex_stop = PTHREAD_MUTEX_INITIALIZER;
 
 void *readStopProgFifoThread() {
 	char stop_prog_str[16] = {'\0'};
 	pthread_mutex_lock(&mutex_stop);
+
 	while (1) {
 		int readFifoNum = readFifo("stop_prog", stop_prog_str, 16);
+		if (readFifoNum < 0) {
+			pthread_exit(0);
+		}
 		if (!strncmp(stop_prog_str, "stop", strlen("stop"))) {
 			stop_prog_recv = 1;
 			pthread_mutex_unlock(&mutex_stop);
@@ -125,102 +135,64 @@ void *readStopProgFifoThread() {
 float range = 0.0f;
 pthread_mutex_t mutex_range = PTHREAD_MUTEX_INITIALIZER;
 
-void *readRangeFifoThread() {
-	pthread_mutex_lock(&mutex_range);
-	//char stop_prog_str[16] = {'\0'};
-	// while (1) {
-	// 	int readFifoNum = readFifo("stop_prog", stop_prog_str, 16);
-	// 	if (!strncmp(stop_prog_str, "stop", strlen("stop"))) {
-	// 		stop_prog_recv = 1;
-	// 		pthread_mutex_unlock(&mutex_range);
-	// 		pthread_exit(0);
-	// 	}
-	// }
+void *readRangeFifoThread(void * args) {
+	while (1) {
+		pthread_mutex_lock(&mutex_range);
+		range = getRange((char*)args);
+		pthread_mutex_unlock(&mutex_range);
+		sleep(1);
+	}
 }
 
-char note_str[3];
+char note_str[3] = {0};
+int write_note_res = -1;
 pthread_mutex_t mutex_note = PTHREAD_MUTEX_INITIALIZER;
 
-void *writeNoteFifoThread() {
-	pthread_mutex_lock(&mutex_note);
-	//char stop_prog_str[16] = {'\0'};
-	// while (1) {
-	// 	int readFifoNum = readFifo("stop_prog", stop_prog_str, 16);
-	// 	if (!strncmp(stop_prog_str, "stop", strlen("stop"))) {
-	// 		stop_prog_recv = 1;
-	// 		pthread_mutex_unlock(&mutex_range);
-	// 		pthread_exit(0);
-	// 	}
-	// }
+void *writeNoteFifoThread(void * args) {
+	while (1) {
+		if (!strlen(note_str)) {
+			continue;
+		}
+		if (!pthread_mutex_trylock(&mutex_note)) {
+			write_note_res = setNote((char*)args, note_str);
+			pthread_mutex_unlock(&mutex_note);
+		}
+		note_str[0] = '\0';
+	}
 }
 
 
 int button_0_state;
 int button_1_state;
 pthread_mutex_t mutex_button = PTHREAD_MUTEX_INITIALIZER;
+typedef struct  {
+	char button_0_fifo[16];
+	char button_1_fifo[16];
+} button_thread_args_t;
+void *readButtonsFifoThread(void * args) {
+	while (1) {
+		pthread_mutex_lock(&mutex_button);
 
-void *readButtonsFifoThread() {
-	pthread_mutex_lock(&mutex_button);
-	//char stop_prog_str[16] = {'\0'};
-	// while (1) {
-	// 	int readFifoNum = readFifo("stop_prog", stop_prog_str, 16);
-	// 	if (!strncmp(stop_prog_str, "stop", strlen("stop"))) {
-	// 		stop_prog_recv = 1;
-	// 		pthread_mutex_unlock(&mutex_range);
-	// 		pthread_exit(0);
-	// 	}
-	// }
+		button_thread_args_t *button_fifo = (button_thread_args_t *) args;
+
+		button_0_state = getButtonState(button_fifo->button_0_fifo);
+		button_1_state = getButtonState(button_fifo->button_1_fifo);
+		pthread_mutex_unlock(&mutex_button);
+		sleep(1);
+	}
+
 }
 
 char cmd_recv[64];
 pthread_mutex_t mutex_cmd = PTHREAD_MUTEX_INITIALIZER;
 
 void *readCmdsFifoThread() {
-	pthread_mutex_lock(&mutex_cmd);
-	//char stop_prog_str[16] = {'\0'};
-	// while (1) {
-	// 	int readFifoNum = readFifo("stop_prog", stop_prog_str, 16);
-	// 	if (!strncmp(stop_prog_str, "stop", strlen("stop"))) {
-	// 		stop_prog_recv = 1;
-	// 		pthread_mutex_unlock(&mutex_range);
-	// 		pthread_exit(0);
-	// 	}
-	// }
+	// pthread_mutex_lock(&mutex_cmd);
+	// pthread_mutex_unlock(&mutex_cmd);
 }
 
 
 int main(int argc, char *argv[]) {
-
-	pthread_t thread_stop;
-	if (pthread_create(&thread_stop, NULL, readStopProgFifoThread, NULL) != 0) {
-		fprintf(stderr, "error: pthread_create was failed\n");
-		exit(-1);
-	}
-
-	pthread_t thread_range;
-	if (pthread_create(&thread_range, NULL, readRangeFifoThread, NULL) != 0) {
-		fprintf(stderr, "error: pthread_create was failed\n");
-		exit(-1);
-	}
-
-	pthread_t thread_note;
-	if (pthread_create(&thread_note, NULL, writeNoteFifoThread, NULL) != 0) {
-		fprintf(stderr, "error: pthread_create was failed\n");
-		exit(-1);
-	}
-
-	pthread_t thread_button;
-	if (pthread_create(&thread_button, NULL, readButtonsFifoThread, NULL) != 0) {
-		fprintf(stderr, "error: pthread_create was failed\n");
-		exit(-1);
-	}
-
-	pthread_t thread_cmd;
-	if (pthread_create(&thread_cmd, NULL, readCmdsFifoThread, NULL) != 0) {
-		fprintf(stderr, "error: pthread_create was failed\n");
-		exit(-1);
-	}
-
 
 	const int notes_num = 12;
 	float max_range = 0.1f;
@@ -230,17 +202,9 @@ int main(int argc, char *argv[]) {
 	int volume = 1;
 
 
-	int range_fd;
 	char range_fifo[16] = {0};
-
-	int note_fd;
 	char note_fifo[16] = {0};
-
-	int button_0_fd;
-	char button_0_fifo[16] = {0};
-
-	int button_1_fd;
-	char button_1_fifo[16] = {0};
+	button_thread_args_t button_thread_args;
 
 	int quiet = 0;
 
@@ -255,66 +219,104 @@ int main(int argc, char *argv[]) {
 		if ((strcmp(argv[QUIT_HELP_OPT_POS], "-q") == 0)) {
 			quiet = 1;
 		}
+
 	} else {
 		printf("Lack of arguments\n");
 		return -1;
 	}
 
 	int range_fifo_arg = 1;
+
 	if (quiet) {
 		range_fifo_arg++;
 	}
+
 	strcpy(range_fifo, argv[range_fifo_arg]);
 
 	int note_fifo_arg = range_fifo_arg + 1;
 	strcpy(note_fifo, argv[note_fifo_arg]);
 
 	int button_0_fifo_arg = note_fifo_arg + 1;
-	strcpy(button_0_fifo, argv[button_0_fifo_arg]);
+	strcpy(button_thread_args.button_0_fifo, argv[button_0_fifo_arg]);
 
 	int button_1_fifo_arg = button_0_fifo_arg + 1;
-	strcpy(button_1_fifo, argv[button_1_fifo_arg]);
+	strcpy(button_thread_args.button_1_fifo, argv[button_1_fifo_arg]);
 
 	if (!quiet) {
 		printf("Received range_fifo = %s\nplay_note_fifo = %s\n", range_fifo, note_fifo);
 	}
 
-	float range = 0.0f;
+	pthread_t thread_stop;
+
+	if (pthread_create(&thread_stop, NULL, readStopProgFifoThread, NULL) != 0) {
+		fprintf(stderr, "error: thread_stop was failed\n");
+		exit(-1);
+	}
+
+	pthread_t thread_range;
+
+	if (pthread_create(&thread_range, NULL, readRangeFifoThread, (void*)range_fifo) != 0) {
+		fprintf(stderr, "error: thread_range was failed\n");
+		exit(-1);
+	}
+
+	pthread_t thread_note;
+
+	if (pthread_create(&thread_note, NULL, writeNoteFifoThread, (void*) note_fifo) != 0) {
+		fprintf(stderr, "error: thread_note was failed\n");
+		exit(-1);
+	}
+
+	pthread_t thread_button;
+
+	if (pthread_create(&thread_button, NULL, readButtonsFifoThread, & button_thread_args) != 0) {
+		fprintf(stderr, "error: thread_button was failed\n");
+		exit(-1);
+	}
+
+	pthread_t thread_cmd;
+
+	if (pthread_create(&thread_cmd, NULL, readCmdsFifoThread, NULL) != 0) {
+		fprintf(stderr, "error: thread_cmd was failed\n");
+		exit(-1);
+	}
 
 	while (1) {
-
-		if (!pthread_mutex_trylock(&mutex)) {
+		if (!pthread_mutex_trylock(&mutex_stop)) {
 			if (stop_prog_recv) {
 				printf("Received stop prog\n");
 				exit(0);
 			}
-			pthread_mutex_unlock(&mutex);
+
+			pthread_mutex_unlock(&mutex_stop);
 		}
 
-		int button_0_state;
-		int button_1_state;
-		button_0_state = getButtonState(button_0_fifo);
-		button_1_state = getButtonState(button_1_fifo);
+		int button_0_state_local;
+		int button_1_state_local;
 
-		//printf("button_0_state = %d, button_1_state = %d\n", button_0_state, button_1_state);
+		pthread_mutex_lock(&mutex_button);
+		button_0_state_local = button_0_state;
+		button_1_state_local = button_1_state;
+		pthread_mutex_unlock(&mutex_button);
 
-		if ((button_0_state < 0) || (button_1_state < 0)) {
-			return -1;
+
+		printf("button_0_state = %d, button_1_state = %d\n", button_0_state_local, button_1_state_local);
+
+		if ((button_0_state_local < 0) || (button_1_state_local < 0)) {
+			printf("Failed to get button states\n");
+			exit(-1);
 		}
 
-		if (!button_0_state) {
-			min_range = getRange(range_fifo);
-			range_step = (max_range - min_range) / notes_num;
+		if (!button_0_state_local) {
+			pthread_mutex_lock(&mutex_range);
+			min_range = range;
+			pthread_mutex_unlock(&mutex_range);
 
-			if (!quiet) {
-				time_t rawtime;
-				struct tm * timeinfo;
-				time ( &rawtime );
-				timeinfo = localtime ( &rawtime );
-				printf ( "Time %s, set min range %0.6f", asctime (timeinfo), min_range);
+			if (min_range < 0) {
+				printf("Failed get min range\n");
+				exit(-1);
 			}
-		} else if (!button_1_state) {
-			max_range = getRange(range_fifo);
+
 			range_step = (max_range - min_range) / notes_num;
 
 			if (!quiet) {
@@ -322,61 +324,104 @@ int main(int argc, char *argv[]) {
 				struct tm * timeinfo;
 				time ( &rawtime );
 				timeinfo = localtime ( &rawtime );
-				printf ( "Time %s, set max range %0.6f", asctime (timeinfo), max_range);
+				printf ( "Time %s, set min range %0.6f\n", asctime (timeinfo), min_range);
+			}
+
+		} else if (!button_1_state_local) {
+			pthread_mutex_lock(&mutex_range);
+			max_range = range;
+			pthread_mutex_unlock(&mutex_range);
+
+			if (max_range < 0) {
+				printf("Failed get max range\n");
+				exit(-1);
+			}
+
+			range_step = (max_range - min_range) / notes_num;
+
+			if (!quiet) {
+				time_t rawtime;
+				struct tm * timeinfo;
+				time ( &rawtime );
+				timeinfo = localtime ( &rawtime );
+				printf ( "Time %s, set max range %0.6f\n", asctime (timeinfo), max_range);
 			}
 
 		} else {
+			int range_local;
+			pthread_mutex_lock(&mutex_range);
+			range_local = range;
+			pthread_mutex_unlock(&mutex_range);
 
-			range = getRange(range_fifo);
-			if (range < 0) {
-				return -1;
+			if (range_local < 0) {
+				printf("Failed get range\n");
+				exit(-1);
 			}
 
-			char note_str[3];
-			//note_fd = open(note_fifo, O_WRONLY);
+			pthread_mutex_lock(&mutex_note);
 
-			if (range >= max_range) {
+			if (range_local >= max_range) {
 				sprintf(note_str, "A#");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - range_step)) {
+
+			} else if (range_local >= (max_range - range_step)) {
 				sprintf(note_str, "A");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (2 * range_step))) {
+
+			} else if (range_local >= (max_range - (2 * range_step))) {
 				sprintf(note_str, "B");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (3 * range_step))) {
+
+			} else if (range_local >= (max_range - (3 * range_step))) {
 				sprintf(note_str, "C#");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (4 * range_step))) {
+
+			} else if (range_local >= (max_range - (4 * range_step))) {
 				sprintf(note_str, "C");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (5 * range_step))) {
+
+			} else if (range_local >= (max_range - (5 * range_step))) {
 				sprintf(note_str, "D#");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (6 * range_step))) {
+
+			} else if (range_local >= (max_range - (6 * range_step))) {
 				sprintf(note_str, "D");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if ((range >= (max_range - (7 * range_step)))) {
+
+			} else if ((range_local >= (max_range - (7 * range_step)))) {
 				sprintf(note_str, "E");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else if (range >= (max_range - (8 * range_step))) {
+
+			} else if (range_local >= (max_range - (8 * range_step))) {
 				sprintf(note_str, "F#");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else	if (range >= (max_range - (9 * range_step))) {
+
+			} else	if (range_local >= (max_range - (9 * range_step))) {
 				sprintf(note_str, "F");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else	if (range >= (max_range - (10 * range_step))) {
+
+			} else	if (range_local >= (max_range - (10 * range_step))) {
 				sprintf(note_str, "G#");
 				//write(note_fd, note_str, strlen(note_str) + 1);
-			} else	if (range < (max_range - (10 * range_step))) {
+
+			} else	if (range_local < (max_range - (10 * range_step))) {
 				sprintf(note_str, "G");
 				//write(note_fd, note_str, strlen(note_str) + 1);
 			}
+
 			//close(note_fd);
-			if (setNote(note_fifo, note_str) < 0) {
+
+			pthread_mutex_unlock(&mutex_note);
+
+			while (write_note_res < 0) {}
+
+			pthread_mutex_lock(&mutex_note);
+			if (write_note_res < 0) {
 				printf("Failed set note\n");
 				exit(-1);
 			}
+			pthread_mutex_unlock(&mutex_note);
+
 			if (!quiet) {
 				time_t rawtime;
 				struct tm * timeinfo;
@@ -384,6 +429,7 @@ int main(int argc, char *argv[]) {
 				timeinfo = localtime ( &rawtime );
 				printf ( "Time %s, note %s, volume %d\n", asctime (timeinfo), note_str, volume);
 			}
+
 			sleep(1);	// duration of note .wav
 		}
 	}
