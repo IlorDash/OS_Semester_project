@@ -10,6 +10,6 @@ while true
 do
 	curr_date=$(date +"%T.%6N")
 	curr_val=$(cat /sys/class/gpio/gpio23/value)
-	echo $curr_date $curr_val >> button_data_23 &
+	echo $curr_date $curr_val > button_data_23
 	sleep 1
 done
